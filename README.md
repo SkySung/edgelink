@@ -9,8 +9,8 @@ It focuses on two main challenges:
 
 - Reliability: Solving Carrier-Grade NAT (CGNAT) traversal using WireGuard with a custom Python Telemetry Agent for latency-aware traffic governance.
 
-Architecture
-
+# Architecture
+```mermaid
 graph TD
     subgraph HQ [Site A: Home/HQ]
         Router[MikroTik hEX] 
@@ -34,7 +34,7 @@ graph TD
     WG_Client --> Agent
     Tetragon -.->|"Kernel Trace"| Agent
     Agent -->|"Backoff Signal"| WG_Client
-
+```
 
 # Key Features
 
