@@ -58,19 +58,31 @@ Uses WireGuard Persistent Keep-alives to punch through ISP NAT.
 
 Configured for Split Tunneling (optimizing Netflix/Youtube traffic routing).
 
-# Quick Start (MVP)
+# Quick Start
 
 Note: The environment is currently transitioning from Shell Scripts to Ansible for better reproducibility.
 
 1. Provisioning (Legacy Shell)
 
-```sudo ./scripts/setup_mvp.sh```
+```bash
+sudo ./scripts/setup_mvp.sh
+```
 
 
 2. Run Governance Agent
 
-```sudo python3 src/monitor_agent.py```
+```bash
+sudo python3 src/monitor_agent.py
+```
 
+3. Run the syslog-monitor
+```bash 
+sudo systemctl daemon-reload
+sudo systemctl enable edgelink-monitor
+sudo systemctl start edgelink-monitor
+# Monitor realtime Log
+journalctl -u edgelink-monitor -f
+```
 
 # Roadmap
 

@@ -17,9 +17,16 @@ sudo apt-get install -y wireguard docker.io python3-pip jq curl
 
 # 3. Setup Tetragon (eBPF Observability)
 # Note: Requires kernel headers
-echo "[-] Pulling Tetragon Docker image..."
-if ! docker images | grep -q "cilium/tetragon"; then
-    sudo docker pull cilium/tetragon:latest
+echo "[-] Pulling Tetragon Docker image (v1.1.2 from Quay.io)..."
+# 定義目標 Image，包含版本號 (Pin Version)
+TARGET_IMAGE="quay.io/cilium/tetragon:v1.1.2"
+LOCAL_TAG="cilium/tetragon:latest"
+
+# 拉取正確的 Image
+if ! docker images | grep -q "$TARGET_IMAGE"; then
+    sudo docker pull $TARGET_IMAGE
+    # 自動幫你打上 Tag，讓舊的 Tool 也能相容
+    sudo docker tag $TARGET_IMAGE $LOCAL_TAG
 else
     echo "    Tetragon image already exists."
 fi

@@ -18,7 +18,7 @@ def get_wireguard_stats():
         # wg show dump format: public-key, psk, endpoint, allowed-ips, latest-handshake, transfer-rx, transfer-tx, ...
         # sudo is required for wg commands
         output = subprocess.check_output(
-            ["sudo", "wg", "show", INTERFACE, "dump"], 
+            ["/usr/bin/wg", "show", INTERFACE, "dump"],
             universal_newlines=True
         ).strip().splitlines()
 
