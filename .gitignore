@@ -6,3 +6,4 @@
 privatekey*
 publickey*
 ansible/inventory/hosts.ini
+.vscode/
