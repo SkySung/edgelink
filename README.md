@@ -41,8 +41,8 @@ graph TD
     Tetragon -.->|"Kernel Trace"| Agent
     Agent -->|"Backoff Signal"| WG_Client_A
     
-    classDef cloud fill:#e8f0fe,stroke:#4285f4,stroke-width:2px;
-    classDef edge fill:#fce8e6,stroke:#ea4335,stroke-width:2px;
+    classDef cloud fill:#e8eaf6,stroke:#3949ab,stroke-width:2px,color:#1a237e;
+    classDef edge fill:#e0f2f1,stroke:#00897b,stroke-width:2px,color:#004d40;
     class Cloud cloud;
     class Site_A,Site_B edge;
 ```
