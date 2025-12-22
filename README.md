@@ -13,19 +13,19 @@ Due to the lack of Public IPs at both the HQ and Branch sites (Triple NAT enviro
 
 ```mermaid
 graph TD
-    subgraph Cloud [Google Cloud Platform (GCP)]
+    subgraph Cloud ["Google Cloud Platform (GCP)"]
         Hub[EdgeLink Relay Hub]
         Firewall[VPC Firewall: UDP 51820]
     end
 
-    subgraph Site_A [Site A: Edge Node]
+    subgraph Site_A ["Site A: Edge Node (Pi)"]
         Pi[Raspberry Pi 3]
         Agent[Python Governance Agent]
         Tetragon[eBPF Tetragon Probe]
         WG_Client_A[WireGuard Interface]
     end
 
-    subgraph Site_B [Site B: Deep NAT Branch]
+    subgraph Site_B ["Site B: Deep NAT Branch (MikroTik)"]
         Router[MikroTik RouterOS]
         NAT_Layers[Triple NAT / CGNAT]
     end
