@@ -1,97 +1,123 @@
-Hybrid Cloud Network Observability & Traffic Governance Lab
+# EdgeLink: Hybrid Cloud Network Observability & Traffic Governance Lab
+(Last update: 12/22)
 
-# Overview
+## Overview
+EdgeLink is a research project designed to simulate and solve enterprise edge connectivity challenges in hostile network environments.
 
-EdgeLink is a research project designed to simulate enterprise edge connectivity issues.
-It focuses on two main challenges:
+It focuses on two main engineering goals:
+1.  **Hybrid Cloud Connectivity**: Overcoming "Triple NAT" and CGNAT barriers using a **Hub-and-Spoke WireGuard architecture** anchored on Google Cloud Platform (GCP).
+2.  **Kernel-Level Observability**: Leveraging **eBPF (Tetragon)** to trace network events at the kernel level, attributing latency spikes to specific processes beyond standard SNMP metrics.
 
-- Visibility: Using eBPF (Tetragon) to trace network events at the kernel level, attributing latency spikes to specific processes.
+## Architecture: The "Hub-and-Spoke" Pivot
+Due to the lack of Public IPs at both the HQ and Branch sites (Triple NAT environment), the architecture utilizes a GCP VM as a static relay hub.
 
-- Reliability: Solving Carrier-Grade NAT (CGNAT) traversal using WireGuard with a custom Python Telemetry Agent for latency-aware traffic governance.
-
-# Architecture
 ```mermaid
 graph TD
-    subgraph HQ [Site A: Home/HQ]
-        Router[MikroTik hEX] 
-        Validation[Validation Client]
+    subgraph Cloud [Google Cloud Platform (GCP)]
+        Hub[EdgeLink Relay Hub]
+        Firewall[VPC Firewall: UDP 51820]
     end
 
-    subgraph Branch [Site B: Edge Node]
+    subgraph Site_A [Site A: Edge Node]
         Pi[Raspberry Pi 3]
         Agent[Python Governance Agent]
         Tetragon[eBPF Tetragon Probe]
-        WG_Client[WireGuard Interface]
+        WG_Client_A[WireGuard Interface]
     end
 
-    Internet((Internet / CGNAT))
+    subgraph Site_B [Site B: Deep NAT Branch]
+        Router[MikroTik RouterOS]
+        NAT_Layers[Triple NAT / CGNAT]
+    end
 
     %% Connections
-    Router <==>|"VPN Tunnel (UDP 51820)"| Internet
-    Internet <==>|"Keep-Alive: 25s"| WG_Client
+    Hub ---|"Static Public IP"| Internet((Internet))
+    
+    WG_Client_A -->|"Initiates Tunnel (Keep-Alive)"| Hub
+    Router -->|"Initiates Tunnel (Reverse Connection)"| Hub
     
     %% Internal Logic
-    WG_Client --> Agent
+    WG_Client_A --> Agent
     Tetragon -.->|"Kernel Trace"| Agent
-    Agent -->|"Backoff Signal"| WG_Client
+    Agent -->|"Backoff Signal"| WG_Client_A
+    
+    classDef cloud fill:#e8f0fe,stroke:#4285f4,stroke-width:2px;
+    classDef edge fill:#fce8e6,stroke:#ea4335,stroke-width:2px;
+    class Cloud cloud;
+    class Site_A,Site_B edge;
 ```
+Key Features
+1. Resilient Hybrid Networking (Hub-and-Spoke)
+Infrastructure: Hosted on GCP Compute Engine (e2-micro) running Debian 12.
 
-# Key Features
+NAT Traversal: Solved the "Triple NAT" and "Double CGNAT" issue where neither site had a public IP.
 
-## Smart Traffic Governance:
+Mechanism: Implements a Reverse Connection strategy where edge nodes initiate the handshake to the Cloud Hub with PersistentKeepalive=25 to maintain state table entries.
 
-Monitors WireGuard interface throughput and active peer count in real-time.
+2. Smart Traffic Governance
+Automated Backoff: A custom Python telemetry agent monitors WireGuard throughput in real-time.
 
-Implements a Backoff Algorithm: automatically pauses background bandwidth testing (Speedtest) when user traffic saturation > 80%.
+Logic: Differentiates between LAN saturation and WAN contention. Automatically throttles background tasks (e.g., speed tests) when critical traffic flow is detected.
 
-Solves the "Noisy Neighbor" problem in multi-tenant edge environments.
+Production Ready: Deployed as a Systemd Service (edgelink-monitor) with auto-healing and journald integration, ensuring 24/7 uptime.
 
-## Kernel-Level Observability:
+3. Kernel-Level Observability (eBPF)
+Tooling: Cilium Tetragon.
 
-Leverages Cilium Tetragon to bypass standard iptables logs.
+Goal: Bypasses standard iptables logging to trace tcp_connect and kfree_skb syscalls directly.
 
-Traces tcp_connect and kfree_skb syscalls to identify dropped packets and connection attempts at the process level.
+Use Case: Identifies exactly which process (PID) is causing network micro-bursts or dropping packets.
 
-## Resilient Connectivity:
+Technology Stack
+Cloud & Infra: Google Cloud Platform (GCP), VPC, Compute Engine.
 
-Uses WireGuard Persistent Keep-alives to punch through ISP NAT.
+Networking: WireGuard (Kernel Space), MikroTik RouterOS v7.
 
-Configured for Split Tunneling (optimizing Netflix/Youtube traffic routing).
+OS & Systems: Debian 12 (Cloud), Raspberry Pi OS (Edge), Linux Systemd.
 
-# Quick Start
+Observability: eBPF (Tetragon), Python, tcpdump/Wireshark.
 
-Note: The environment is currently transitioning from Shell Scripts to Ansible for better reproducibility.
+Quick Start
+1. Hub Provisioning (GCP)
+Currently managed via gcloud CLI (Migration to Terraform planned)
 
-1. Provisioning (Legacy Shell)
+```Bash
+# Verify WireGuard Status on Hub
+sudo wg show wg0
+```
+2. Edge Node Deployment (Raspberry Pi)
+The monitoring agent is managed via Systemd for production stability.
 
 ```bash
+# 1. Install Dependencies & WireGuard
+
 sudo ./scripts/setup_mvp.sh
-```
 
+# 2. Enable & Start the Governance Service
 
-2. Run Governance Agent
-
-```bash
-sudo python3 src/monitor_agent.py
-```
-
-3. Run the syslog-monitor
-```bash 
 sudo systemctl daemon-reload
 sudo systemctl enable edgelink-monitor
 sudo systemctl start edgelink-monitor
-# Monitor realtime Log
+
+# 3. View Real-time Telemetry Logs
+
 journalctl -u edgelink-monitor -f
 ```
+Roadmap status (v1.3)
+[x] Phase 1: Connectivity (Hybrid Cloud)
 
-# Roadmap
+[x] Pivot to Hub-and-Spoke architecture using GCP.
 
-[x] Phase 1: Connectivity (WireGuard Site-to-Site)
+[x] Establish stable tunnels through Triple NAT.
 
-[x] Phase 2: Observability (Python Agent + Basic eBPF)
+[x] Phase 2: Observability & Stability
 
-[ ] Phase 3: Refactoring to Ansible Playbooks (In Progress)
+[x] Deploy Systemd daemons for the Python Agent.
 
-  - Goal: Replace setup_mvp.sh with idempotent roles.
+[x] Validate eBPF hooks on the Edge Node.
 
-[ ] Phase 4: Integration with Prometheus/Grafana Dashboard.
+[ ] Phase 3: Automation (In Progress)
+
+[ ] Refactor shell scripts into Ansible Roles (Idempotency).
+
+[ ] Automate MikroTik config backups via Ansible `community.routeros`
