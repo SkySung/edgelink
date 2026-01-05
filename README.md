@@ -1,123 +1,122 @@
 # EdgeLink: Hybrid Cloud Network Observability & Traffic Governance Lab
+A hybrid cloud network architecture that bypasses hostile NAT environments to enable observability for edge devices.
+
 (Last update: 12/22)
 
 ## Overview
-EdgeLink is a research project designed to simulate and solve enterprise edge connectivity challenges in hostile network environments.
 
-It focuses on two main engineering goals:
-1.  **Hybrid Cloud Connectivity**: Overcoming "Triple NAT" and CGNAT barriers using a **Hub-and-Spoke WireGuard architecture** anchored on Google Cloud Platform (GCP).
-2.  **Kernel-Level Observability**: Leveraging **eBPF (Tetragon)** to trace network events at the kernel level, attributing latency spikes to specific processes beyond standard SNMP metrics.
+I built EdgeLink because I needed to monitor network devices (like a MikroTik router and Raspberry Pi) located in a building with "Triple NAT"—meaning no public IP and no way to accept incoming connections. Standard VPNs failed because they require at least one side to have an open port.
 
-## Architecture: The "Hub-and-Spoke" Pivot
-Due to the lack of Public IPs at both the HQ and Branch sites (Triple NAT environment), the architecture utilizes a GCP VM as a static relay hub.
+This project solves that by using a Google Cloud (GCP) VM as a "Relay Hub." Both edge sites initiate the connection outbound to the cloud hub. Once connected, they form a unified private network (Overlay) where I can run monitoring tools like Prometheus and Grafana to track latency and packet loss in real-time.
 
+It’s essentially a DIY SD-WAN that trades expensive proprietary hardware for Linux networking knowledge.
+
+## Architecture
 ```mermaid
-graph TD
-    subgraph Cloud ["Google Cloud Platform (GCP)"]
-        Hub[EdgeLink Relay Hub]
-        Firewall[VPC Firewall: UDP 51820]
-    end
-
-    subgraph Site_A ["Site A: Edge Node (Pi)"]
-        Pi[Raspberry Pi 3]
-        Agent[Python Governance Agent]
-        Tetragon[eBPF Tetragon Probe]
-        WG_Client_A[WireGuard Interface]
-    end
-
-    subgraph Site_B ["Site B: Deep NAT Branch (MikroTik)"]
-        Router[MikroTik RouterOS]
-        NAT_Layers[Triple NAT / CGNAT]
-    end
-
-    %% Connections
-    Hub ---|"Static Public IP"| Internet((Internet))
-    
-    WG_Client_A -->|"Initiates Tunnel (Keep-Alive)"| Hub
-    Router -->|"Initiates Tunnel (Reverse Connection)"| Hub
-    
-    %% Internal Logic
-    WG_Client_A --> Agent
-    Tetragon -.->|"Kernel Trace"| Agent
-    Agent -->|"Backoff Signal"| WG_Client_A
-    
+graph LR
+    %% --- Styles ---
     classDef cloud fill:#e8eaf6,stroke:#3949ab,stroke-width:2px,color:#1a237e;
-    classDef edge fill:#e0f2f1,stroke:#00897b,stroke-width:2px,color:#004d40;
-    class Cloud cloud;
-    class Site_A,Site_B edge;
+    classDef siteA fill:#e0f2f1,stroke:#00897b,stroke-width:2px,color:#004d40;
+    classDef siteB fill:#fff3e0,stroke:#e65100,stroke-width:2px,color:#bf360c;
+    classDef tunnel stroke:#43a047,stroke-width:3px,stroke-dasharray: 5 5,fill:none;
+
+    %% --- Cloud Hub ---
+    subgraph Cloud ["☁️ GCP Core (Taipei Region)"]
+        Hub(<b>Relay Hub</b><br/>Debian 12 + WireGuard<br/>Public IP)
+        Monitor(Prometheus + Grafana)
+        Hub --> Monitor
+    end
+
+    %% --- Site A (Hsinchu) ---
+    subgraph Site_A ["🏠 Site A: Hsinchu (Linux Edge)"]
+        Pi(<b>Raspberry Pi 3</b><br/>Linux Router / FRR)
+        eBPF(Tetragon Probe)
+        Pi --- eBPF
+    end
+
+    %% --- Site B (Taipei) ---
+    subgraph Site_B ["🏢 Site B: Taipei (Legacy Branch)"]
+        MikroTik(<b>MikroTik E50UG</b><br/>Commercial Gateway)
+        Legacy_PC[Local Laptop/Client]
+        MikroTik --- Legacy_PC
+    end
+
+    %% --- Connections ---
+    Pi <===>|"<b>Tunnel A</b><br/>(Linux WG)"| Hub
+    MikroTik <===>|"<b>Tunnel B</b><br/>(RouterOS WG)"| Hub
+    
+    %% --- Data Flow ---
+    Monitor -.->|"Latency Check"| Pi
+    Monitor -.->|"Latency Check"| MikroTik
+
+    %% --- Styling ---
+    class Cloud,Hub,Monitor cloud;
+    class Site_A,Pi,eBPF siteA;
+    class Site_B,MikroTik,Legacy_PC siteB;
+    linkStyle 0,1 stroke:#43a047,stroke-width:4px;
 ```
-Key Features
-1. Resilient Hybrid Networking (Hub-and-Spoke)
-Infrastructure: Hosted on GCP Compute Engine (e2-micro) running Debian 12.
 
-NAT Traversal: Solved the "Triple NAT" and "Double CGNAT" issue where neither site had a public IP.
 
-Mechanism: Implements a Reverse Connection strategy where edge nodes initiate the handshake to the Cloud Hub with PersistentKeepalive=25 to maintain state table entries.
+## How It Works
+The architecture relies on a Hub-and-Spoke topology where the "Hub" is a static point in the cloud, and "Spokes" are the dynamic edge sites.
 
-2. Smart Traffic Governance
-Automated Backoff: A custom Python telemetry agent monitors WireGuard throughput in real-time.
+- Reverse Connection: Since the Edge cannot receive traffic, it must start the tunnel. I use WireGuard with PersistentKeepalive = 25s to keep the NAT state tables open.
 
-Logic: Differentiates between LAN saturation and WAN contention. Automatically throttles background tasks (e.g., speed tests) when critical traffic flow is detected.
+- The Relay: The GCP instance runs Debian with IP Forwarding enabled. It acts as a router, passing traffic between the Pi (Site A) and the MikroTik (Site B).
 
-Production Ready: Deployed as a Systemd Service (edgelink-monitor) with auto-healing and journald integration, ensuring 24/7 uptime.
+- Observability: A Prometheus instance on the Hub scrapes metrics from the edge nodes through these tunnels, allowing me to see "inside" the NATed network.
 
-3. Kernel-Level Observability (eBPF)
-Tooling: Cilium Tetragon.
+## Getting Started (User Guide)
+This guide assumes you want to replicate this setup for your own home lab or edge monitoring.
 
-Goal: Bypasses standard iptables logging to trace tcp_connect and kfree_skb syscalls directly.
+Prerequisites:
+- A Google Cloud Platform account (Free Tier e2-micro is sufficient).
 
-Use Case: Identifies exactly which process (PID) is causing network micro-bursts or dropping packets.
+- A Raspberry Pi (or any Linux machine) for the edge.
 
-Technology Stack
-Cloud & Infra: Google Cloud Platform (GCP), VPC, Compute Engine.
+- (Optional) A MikroTik router for the second edge site.
 
-Networking: WireGuard (Kernel Space), MikroTik RouterOS v7.
 
-OS & Systems: Debian 12 (Cloud), Raspberry Pi OS (Edge), Linux Systemd.
-
-Observability: eBPF (Tetragon), Python, tcpdump/Wireshark.
-
-Quick Start
-1. Hub Provisioning (GCP)
-Currently managed via gcloud CLI (Migration to Terraform planned)
-
-```Bash
-# Verify WireGuard Status on Hub
-sudo wg show wg0
-```
-2. Edge Node Deployment (Raspberry Pi)
-The monitoring agent is managed via Systemd for production stability.
+1. Cloud Hub Setup
+Spin up a Debian/Ubuntu VM on GCP. Open UDP port 51820 in the VPC Firewall.
 
 ```bash
-# 1. Install Dependencies & WireGuard
+# Enable IP Forwarding to allow routing
+echo "net.ipv4.ip_forward=1" | sudo tee -a /etc/sysctl.conf
+sudo sysctl -p
 
-sudo ./scripts/setup_mvp.sh
-
-# 2. Enable & Start the Governance Service
-
-sudo systemctl daemon-reload
-sudo systemctl enable edgelink-monitor
-sudo systemctl start edgelink-monitor
-
-# 3. View Real-time Telemetry Logs
-
-journalctl -u edgelink-monitor -f
+# Install WireGuard
+sudo apt update && sudo apt install wireguard
 ```
-Roadmap status (v1.3)
-[x] Phase 1: Connectivity (Hybrid Cloud)
 
-[x] Pivot to Hub-and-Spoke architecture using GCP.
+2. Edge Node Setup (Linux)
+On your Raspberry Pi, install WireGuard and configure the interface to "dial out" to the Hub.
 
-[x] Establish stable tunnels through Triple NAT.
+```bash
+# /etc/wireguard/wg0.conf
+[Interface]
+PrivateKey = <Your_Pi_Private_Key>
+Address = 10.10.10.2/24
 
-[x] Phase 2: Observability & Stability
+[Peer]
+PublicKey = <Your_Hub_Public_Key>
+Endpoint = <GCP_Static_IP>:51820
+AllowedIPs = 10.10.10.0/24
+PersistentKeepalive = 25  # <--- CRITICAL for NAT Traversal
+```
 
-[x] Deploy Systemd daemons for the Python Agent.
+3. Verify Connectivity
+From the Pi, try to ping the Hub's internal IP.
 
-[x] Validate eBPF hooks on the Edge Node.
 
-[ ] Phase 3: Automation (In Progress)
+## Known Issues / Roadmap
+Things that are currently broken or incomplete:
 
-[ ] Refactor shell scripts into Ansible Roles (Idempotency).
+Automated Failover: Currently, if the GCP Hub goes down, the entire overlay network stops. There is no redundant hub yet.
 
-[ ] Automate MikroTik config backups via Ansible `community.routeros`
+Ansible Migration: The migration from Bash scripts to Ansible is only 50% complete. The MikroTik configuration is still manual.
+
+Security: The current setup allows full traffic between spokes. I plan to implement stricter iptables rules on the Hub to isolate sites.
+
+Contact
+Sky Sung - [LinkedIn](https://www.linkedin.com/in/tian-yu-sung-sky/)
