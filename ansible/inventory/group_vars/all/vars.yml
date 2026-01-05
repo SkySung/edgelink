@@ -1,0 +1,5 @@
+wireguard_address: "10.10.10.2/24"
+# 讓 Ansible 知道變數對應關係
+wireguard_private_key: "{{ vault_wireguard_private_key }}"
+wireguard_hub_public_key: "{{ vault_wireguard_hub_public_key }}"
+wireguard_hub_endpoint: "{{ vault_wireguard_hub_endpoint }}"

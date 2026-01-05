@@ -1,9 +1,9 @@
 ---
 - name: Provision Edge Node (Raspberry Pi)
   hosts: edge_nodes
-  become: yes  # Elevate privileges to root (sudo)
+  become: yes
   vars:
-    # System Configuration
+    # 這裡只留系統設定，敏感變數已經搬到 inventory/group_vars/all/ 去了
     sysctl_config:
       - { name: 'net.ipv4.ip_forward', value: '1' }
 
@@ -14,18 +14,18 @@
     - name: Update apt cache
       apt:
         update_cache: yes
-        cache_valid_time: 3600  # Only update if cache is older than 1 hour
+        cache_valid_time: 3600
 
     - name: Install essential networking tools
       apt:
         name:
           - wireguard
-          - openresolv  # Required for WireGuard DNS management
-          - qrencode    # Useful for debugging config via mobile
+          - openresolv
+          - qrencode
         state: present
 
     # -------------------------------------------------------
-    # 2. Kernel Configuration (Enable Routing)
+    # 2. Kernel Configuration
     # -------------------------------------------------------
     - name: Enable IPv4 forwarding in sysctl
       sysctl:
@@ -35,43 +35,33 @@
         reload: yes
       loop: "{{ sysctl_config }}"
 
+# -------------------------------------------------------
+    # 3. WireGuard Configuration (Updated)
     # -------------------------------------------------------
-    # 3. WireGuard Configuration (Infrastructure as Code)
-    # -------------------------------------------------------
-    - name: Generate WireGuard configuration file (wg0.conf)
-      copy:
+    - name: Generate WireGuard configuration from template
+      template:
+        # 修改這裡：加上 "../templates/"
+        src: ../templates/wg0.conf.j2
         dest: /etc/wireguard/wg0.conf
         owner: root
         group: root
         mode: '0600'
-        content: |
-          # Managed by Ansible - Do Not Edit Manually
-          [Interface]
-          Address = {{ wireguard_address }}
-          PrivateKey = {{ wireguard_private_key }}
-          
-          # Use Google DNS for tunnel traffic
-          DNS = 8.8.8.8
-
-          [Peer]
-          # GCP Hub (Relay Server)
-          PublicKey = {{ wireguard_hub_public_key }}
-          Endpoint = {{ wireguard_hub_endpoint }}
-          
-          # Routing: 
-          # 10.10.10.0/24 -> Manage Traffic (VPN Internal)
-          # 192.168.0.0/24 -> If you need to route traffic to Hub's network (Future)
-          # Set to 0.0.0.0/0 ONLY if you want all traffic (e.g. Netflix) to go through Hub
-          AllowedIPs = 10.10.10.0/24
-          
-          # PersistentKeepalive is CRITICAL for NAT Traversal (Pi is behind NAT)
-          PersistentKeepalive = 25
+      notify: Restart WireGuard
 
     # -------------------------------------------------------
     # 4. Service Management
     # -------------------------------------------------------
-    - name: Enable and start WireGuard service (wg-quick@wg0)
+    - name: Enable WireGuard service
       systemd:
         name: wg-quick@wg0
         enabled: yes
         state: started
+
+  # -------------------------------------------------------
+  # Handlers (事件驅動區)
+  # -------------------------------------------------------
+  handlers:
+    - name: Restart WireGuard
+      systemd:
+        name: wg-quick@wg0
+        state: restarted

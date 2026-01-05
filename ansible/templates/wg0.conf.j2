@@ -1,0 +1,12 @@
+# Managed by Ansible - Do Not Edit Manually
+[Interface]
+Address = {{ wireguard_address }}
+PrivateKey = {{ wireguard_private_key }}
+DNS = 8.8.8.8
+
+[Peer]
+# GCP Hub
+PublicKey = {{ wireguard_hub_public_key }}
+Endpoint = {{ wireguard_hub_endpoint }}
+AllowedIPs = 10.10.10.0/24
+PersistentKeepalive = 25
