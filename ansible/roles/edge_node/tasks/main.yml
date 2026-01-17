@@ -1,0 +1,72 @@
+---
+# --- [1. System Prerequisites] ---
+- name: Ensure required system packages are installed
+  apt:
+    name:
+      - python3
+      - iputils-ping
+      - curl  # Required for installing uv
+    state: present
+    update_cache: yes
+
+# --- [2. Directory Structure] ---
+- name: Create project source directory
+  file:
+    path: /home/pi/edgelink/src
+    state: directory
+    owner: pi
+    group: pi
+    mode: '0755'
+
+- name: Create directory for virtual environment
+  file:
+    path: /opt/edgelink
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+# --- [3. Modern Python Tooling (uv)] ---
+- name: Install uv (The Python package manager)
+  shell: curl -LsSf https://astral.sh/uv/install.sh | sh
+  args:
+    creates: /usr/local/bin/uv  # Check if already installed
+  environment:
+    UV_INSTALL_DIR: "/usr/local/bin"
+
+- name: Create virtual environment with uv
+  command: /usr/local/bin/uv venv /opt/edgelink/.venv
+  args:
+    creates: /opt/edgelink/.venv/bin/python
+  # No extra_args needed here, uv handles it cleanly
+
+- name: Install dependencies into venv (prometheus_client)
+  command: /usr/local/bin/uv pip install prometheus_client
+  environment:
+    VIRTUAL_ENV: "/opt/edgelink/.venv"
+  register: uv_install
+  changed_when: "'Audited' in uv_install.stderr"
+
+- name: Ensure venv permissions
+  file:
+    path: /opt/edgelink/.venv
+    owner: root
+    group: root
+    recurse: yes
+
+# --- [4. Application Deployment] ---
+- name: Deploy monitor_exporter.py
+  copy:
+    src: monitor_exporter.py
+    dest: /home/pi/edgelink/src/monitor_exporter.py
+    owner: root
+    group: root
+    mode: '0755'
+
+# --- [5. Service Management] ---
+- name: Install systemd unit for exporter
+  template:
+    src: edgelink-monitor.service.j2
+    dest: /etc/systemd/system/edgelink-monitor.service
+    mode: '0644'
+  notify: Restart exporter service

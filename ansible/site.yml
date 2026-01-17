@@ -1,0 +1,15 @@
+---
+# Play 1: Provision Control Plane (GCP Hub)
+- name: Provision Control Plane (GCP Hub)
+  hosts: hub
+  become: yes
+  roles:
+    - hub_monitor
+
+# Play 2: Provision Edge Nodes (Raspberry Pi)
+- name: Provision Edge Nodes (Raspberry Pi)
+  hosts: edges
+  become: yes
+  roles:
+    - edge_node
+

@@ -1,0 +1,14 @@
+[Unit]
+Description=EdgeLink Network Monitor Exporter
+After=network.target
+
+[Service]
+User=root
+WorkingDirectory=/home/pi/edgelink/src
+ExecStart=/opt/edgelink/.venv/bin/python /home/pi/edgelink/src/monitor_exporter.py
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+

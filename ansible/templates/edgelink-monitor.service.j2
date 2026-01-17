@@ -1,0 +1,18 @@
+[Unit]
+Description=EdgeLink Network Monitor Exporter
+After=network.target
+
+[Service]
+# Run as root to allow ping (ICMP) privileges
+User=root
+WorkingDirectory=/home/pi/edgelink/src
+
+# [CRITICAL] Use the python interpreter inside the uv virtual environment
+ExecStart=/opt/edgelink/.venv/bin/python /home/pi/edgelink/src/monitor_exporter.py
+
+# Auto-healing policy
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

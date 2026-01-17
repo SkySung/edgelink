@@ -1,0 +1,42 @@
+---
+- name: Install system dependencies for Docker module
+  apt:
+    name:
+      - docker.io
+      - python3-docker
+      - docker-compose-plugin
+    state: present
+    update_cache: yes
+- name: Ensure Docker engine and compose plugin are installed
+  apt:
+    name:
+      - docker.io
+      - docker-compose-plugin
+    state: present
+    update_cache: yes
+
+- name: Create monitoring directory
+  file:
+    path: /opt/edgelink/monitoring
+    state: directory
+    mode: '0755'
+
+- name: Deploy docker-compose.yml
+  copy:
+    src: docker-compose.yml
+    dest: /opt/edgelink/monitoring/docker-compose.yml
+    mode: '0644'
+
+- name: Render prometheus.yml
+  template:
+    src: prometheus.yml.j2
+    dest: /opt/edgelink/monitoring/prometheus.yml
+    mode: '0644'
+
+- name: Ensure monitoring stack is up (Docker Compose v2)
+  community.docker.docker_compose_v2:
+    project_src: /opt/edgelink/monitoring
+    state: present
+    pull: always
+
+

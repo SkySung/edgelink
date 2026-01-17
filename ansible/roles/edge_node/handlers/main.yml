@@ -1,0 +1,7 @@
+---
+- name: Restart exporter service
+  systemd:
+    name: edgelink-monitor.service
+    state: restarted
+    daemon_reload: yes
+    enabled: yes
