@@ -9,6 +9,8 @@ ExecStart=/opt/edgelink/.venv/bin/python /home/pi/edgelink/src/monitor_exporter.
 Restart=always
 RestartSec=5
 
+StandardOutput=journal
+StandardError=journal
 [Install]
 WantedBy=multi-user.target
 
