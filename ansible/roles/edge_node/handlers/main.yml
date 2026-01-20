@@ -5,3 +5,7 @@
     state: restarted
     daemon_reload: yes
     enabled: yes
+- name: Restart WireGuard
+  service:
+    name: wg-quick@wg0
+    state: restarted

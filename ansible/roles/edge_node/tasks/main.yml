@@ -8,7 +8,29 @@
       - curl  # Required for installing uv
     state: present
     update_cache: yes
+# --- [1.5 WireGuard Network Tunnel] ---
+- name: Install WireGuard packages
+  apt:
+    name:
+      - wireguard
+      - wireguard-tools
+      - openresolv 
+    state: present
 
+- name: Deploy WireGuard configuration
+  template:
+    src: wg0.conf.j2  
+    dest: /etc/wireguard/wg0.conf
+    owner: root
+    group: root
+    mode: '0600' 
+  notify: Restart WireGuard
+
+- name: Enable and start WireGuard service
+  service:
+    name: wg-quick@wg0
+    enabled: yes
+    state: started
 # --- [2. Directory Structure] ---
 - name: Create project source directory
   file:
